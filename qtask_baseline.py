@@ -8,6 +8,9 @@ import pycrfsuite
 import ast
 import numpy as np
 import sys
+import argparse
+from os.path import exists
+from rouge import FilesRouge
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
 
@@ -131,9 +134,9 @@ def label_data(fpath, mode):
     return docs
 
 
-def postag_data(labeled_data, fname):
+def postag_data(labeled_data, fpath):
 
-    print('\nPos-tagging {} dataset...\n'.format(fname))
+    print('\nPos-tagging dataset...\n')
 
     data = []
     for _, labeled in enumerate(labeled_data):
@@ -143,7 +146,7 @@ def postag_data(labeled_data, fname):
         tagged_labeled_data.insert(0, labeled[0])
         data.append(tagged_labeled_data)
 
-    with open('data/tagged_labeled_' + fname + '.csv', 'wt', encoding='utf-8', newline='') as save_data:
+    with open(fpath, 'wt', encoding='utf-8', newline='') as save_data:
         cw=csv.writer(save_data)
         for row in data:
             cw.writerow(row)
@@ -408,94 +411,127 @@ def get_predict_content(test_data_reader,y_test):
     return predict_sentences
 
 
-
-tag_mode = 'pqn'  # pqn or xqx
-
-labeled_train = label_data("data/qtask_train.csv", mode = tag_mode)
-labeled_test = label_data("data/qtask_test.csv", mode = tag_mode)
-
-postagged_train = postag_data(labeled_train, 'train')
-postagged_test = postag_data(labeled_test, 'test')
-
-train_sentence_indexs=[doc[0] for doc in postagged_train]
-test_sentence_indexs=[doc[0] for doc in postagged_test]
-
-X_train = [extract_features(doc[1:]) for doc in postagged_train]
-y_train = [get_labels(doc[1:]) for doc in postagged_train]
-X_test = [extract_features(doc[1:]) for doc in postagged_test]
-y_test = [get_labels(doc[1:]) for doc in postagged_test]
-
-X_train=[[train_sentence_indexs[index],x_sentence] for index, x_sentence in enumerate(X_train)]
-y_train=[[train_sentence_indexs[index],y_sentence] for index, y_sentence in enumerate(y_train)]
-X_test=[[test_sentence_indexs[index],x_sentence] for index, x_sentence in enumerate(X_test)]
-y_test=[[test_sentence_indexs[index],y_sentence] for index, y_sentence in enumerate(y_test)]
+def read_postagged_data(fpath):
+    pt_data=[]
+    pt_line=[]
+    with open(tagged_labeled_train_path,'r',encoding='utf-8',errors="ignore") as csvfile:
+        csv_reader = csv.reader(csvfile)
+        for row in csv_reader:
+            pt_line=[ast.literal_eval(word)for word in row[1:]]
+            pt_line.insert(0,row[0])
+            pt_data.append(pt_line)
+    return pt_data
 
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='qtask')
+    parser.add_argument('--mode', default='pqn', type=str, help='Labeling mode (pqn or xqx)')
+    parser.add_argument('--iter', default=500, type=int, help='Number of iterations')
+    parser.add_argument('--dataset', default='T50', type=str, help='Dataset (T50 or movie)')
+    parser.add_argument('--from_scratch', action='store_true', help='If not set, uses tagged_labeled CSVs')
+    args = parser.parse_args()
 
-trainer = pycrfsuite.Trainer(verbose=True)
+    tagged_labeled_train_path = 'data/{}/tagged_labeled_train_{}.csv'.format(args.dataset, args.mode)
+    tagged_labeled_test_path = 'data/{}/tagged_labeled_test_{}.csv'.format(args.dataset, args.mode)
 
-for xseq, yseq in zip(X_train, y_train):
-    trainer.append(xseq[1], yseq[1])
+    if args.from_scratch or not exists(tagged_labeled_train_path) or not exists(tagged_labeled_test_path):
+        labeled_train = label_data("data/{}/qtask_train.csv".format(args.dataset), mode = args.mode)
+        labeled_test = label_data("data/{}/qtask_test.csv".format(args.dataset), mode = args.mode)
+        postagged_train = postag_data(labeled_train, tagged_labeled_train_path)
+        postagged_test = postag_data(labeled_test, tagged_labeled_test_path)
+    else:
+        print('Reading pre-generated pos-tagged data...')
+        postagged_train = read_postagged_data(tagged_labeled_train_path)
+        postagged_test = read_postagged_data(tagged_labeled_test_path)
 
-trainer.set_params({
-    'c1':1.0,
-    'c2':1.0,
-    'max_iterations': 1,
-    'feature.possible_transitions': True
-})
+    train_sentence_indexs=[doc[0] for doc in postagged_train]
+    test_sentence_indexs=[doc[0] for doc in postagged_test]
 
-trainer.train(r"crf.model")
-tagger1=pycrfsuite.Tagger()
-tagger1.open("crf.model")
+    print('Extracting features...')
+    X_train = [extract_features(doc[1:]) for doc in postagged_train]
+    y_train = [get_labels(doc[1:]) for doc in postagged_train]
+    X_test = [extract_features(doc[1:]) for doc in postagged_test]
+    y_test = [get_labels(doc[1:]) for doc in postagged_test]
 
-y_pred=[]
+    X_train=[[train_sentence_indexs[index],x_sentence] for index, x_sentence in enumerate(X_train)]
+    y_train=[[train_sentence_indexs[index],y_sentence] for index, y_sentence in enumerate(y_train)]
+    X_test=[[test_sentence_indexs[index],x_sentence] for index, x_sentence in enumerate(X_test)]
+    y_test=[[test_sentence_indexs[index],y_sentence] for index, y_sentence in enumerate(y_test)]
 
-for xseq in X_test:
-    y_pred_sentence = tagger1.tag(xseq[1])
-    y_pred.append([xseq[0], y_pred_sentence])
+    print('Constructing CRF trainer...')
+    trainer = pycrfsuite.Trainer(verbose=True)
 
-#print('\n\n\n\n\n**********************')
-#print(y_test[0])
-#print('**********************')
-#print(y_pred[0])
-#print('**********************')
+    for xseq, yseq in zip(X_train, y_train):
+        trainer.append(xseq[1], yseq[1])
 
-coordinate_true = get_coordinate(X_test, y_test)
-coordinate_pred = get_coordinate(X_test, y_pred)
+    trainer.set_params({
+        'c1':1.0,
+        'c2':1.0,
+        'max_iterations': args.iter,
+        'feature.possible_transitions': True
+    })
 
-true_sentence = get_predict_content(postagged_test, y_test)
-true_sentence = turn_sentences_to_str(true_sentence)
+    print('Training...')
+    trainer.train(r"crf.model")
+    tagger1=pycrfsuite.Tagger()
+    tagger1.open("crf.model")
 
-pred_sentence = get_predict_content(postagged_test, y_pred)
-pred_sentence = turn_sentences_to_str(pred_sentence)
+    y_pred=[]
 
-#print(coordinate_true[0])
-#print('**********************')
-#print(coordinate_pred)
-#print('**********************')
-#print(true_sentence[0])
-#print('**********************')
-#print(pred_sentence[0])
-#print('**********************\n\n\n\n\n')
+    for xseq in X_test:
+        y_pred_sentence = tagger1.tag(xseq[1])
+        y_pred.append([xseq[0], y_pred_sentence])
 
+    #print('\n\n\n\n\n**********************')
+    #print(y_test[0])
+    #print('**********************')
+    #print(y_pred[0])
+    #print('**********************')
 
-# WRITE TO FILES FOR ROUGE SCORE
+    coordinate_true = get_coordinate(X_test, y_test)
+    coordinate_pred = get_coordinate(X_test, y_pred)
 
-tq_file = open('data/true_quotes.txt', 'w')
-for doc in true_sentence:
-    true_quot = doc[3]
-    tq_file.write("%s\n" % true_quot)
-tq_file.close()
+    true_sentence = get_predict_content(postagged_test, y_test)
+    true_sentence = turn_sentences_to_str(true_sentence)
 
-pq_file = open('data/pred_quotes.txt', 'w')
-for doc in pred_sentence:
-    pred_quot = doc[3]
-    if pred_quot == "" or ".":
-        pred_quot = "N/A"
-    pq_file.write("%s\n" % pred_quot)
-pq_file.close()
+    pred_sentence = get_predict_content(postagged_test, y_pred)
+    pred_sentence = turn_sentences_to_str(pred_sentence)
 
-f1_mean, recall_mean, precision_mean, f1_score_all = evaluate(coordinate_true, coordinate_pred, true_sentence)
+    # print(coordinate_true[0])
+    # print('**********************')
+    # print(coordinate_pred[0])
+    # print('**********************')
+    # print(true_sentence[0])
+    # print('**********************')
+    # print(pred_sentence[0])
+    # print('**********************\n\n\n\n\n')
 
-print("{}: precision :{:.3f}\t recall:{:.3f}\t f1_score:{:.3f}".format(
-    "average", precision_mean, recall_mean, f1_mean))
+    # WRITE TO FILES FOR ROUGE SCORE
+
+    tq_path = 'data/{}/true_quotes_{}.txt'.format(args.dataset, args.mode)
+    tq_file = open(tq_path, 'w')
+    for doc in true_sentence:
+        true_quot = doc[3]
+        tq_file.write("{}\n".format(true_quot))
+    tq_file.close()
+
+    pq_path = 'data/{}/pred_quotes_{}.txt'.format(args.dataset, args.mode)
+    pq_file = open(pq_path, 'w')
+    for doc in pred_sentence:
+        pred_quot = doc[3]
+        if pred_quot in ["", ".", "...", "!"]:
+            pred_quot = "N/A"
+        pq_file.write("{}\n".format(pred_quot))
+    pq_file.close()
+
+    f1_mean, recall_mean, precision_mean, f1_score_all = evaluate(coordinate_true, coordinate_pred, true_sentence)
+    f1_results = "precision :{:.5f}\t recall:{:.5f}\t f1_score:{:.5f}".format(precision_mean, recall_mean, f1_mean)
+    print(f1_results)
+
+    files_rouge = FilesRouge()
+    rouge_results = files_rouge.get_scores(pq_path, tq_path, avg=True)
+    print(rouge_results)
+
+    results_file = open('data/{}/results_{}_{}.txt'.format(args.dataset, args.mode, str(args.iter)), 'w')
+    results_file.write("{}\n{}\n".format(f1_results, rouge_results))
+    results_file.close()
