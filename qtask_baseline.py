@@ -374,7 +374,7 @@ def turn_sentences_to_str(predict_sentences):
     return predict_sentences
 
 
-def get_predict_content(test_data_reader,y_test):
+def get_predict_content(test_data_reader, y_test):
 
     predict_sentences=[]
 
@@ -414,7 +414,7 @@ def get_predict_content(test_data_reader,y_test):
 def read_postagged_data(fpath):
     pt_data=[]
     pt_line=[]
-    with open(tagged_labeled_train_path,'r',encoding='utf-8',errors="ignore") as csvfile:
+    with open(fpath,'r',encoding='utf-8',errors="ignore") as csvfile:
         csv_reader = csv.reader(csvfile)
         for row in csv_reader:
             pt_line=[ast.literal_eval(word)for word in row[1:]]
@@ -482,12 +482,6 @@ if __name__ == "__main__":
         y_pred_sentence = tagger1.tag(xseq[1])
         y_pred.append([xseq[0], y_pred_sentence])
 
-    #print('\n\n\n\n\n**********************')
-    #print(y_test[0])
-    #print('**********************')
-    #print(y_pred[0])
-    #print('**********************')
-
     coordinate_true = get_coordinate(X_test, y_test)
     coordinate_pred = get_coordinate(X_test, y_pred)
 
@@ -496,15 +490,6 @@ if __name__ == "__main__":
 
     pred_sentence = get_predict_content(postagged_test, y_pred)
     pred_sentence = turn_sentences_to_str(pred_sentence)
-
-    # print(coordinate_true[0])
-    # print('**********************')
-    # print(coordinate_pred[0])
-    # print('**********************')
-    # print(true_sentence[0])
-    # print('**********************')
-    # print(pred_sentence[0])
-    # print('**********************\n\n\n\n\n')
 
     # WRITE TO FILES FOR ROUGE SCORE
 

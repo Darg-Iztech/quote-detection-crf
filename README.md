@@ -5,12 +5,12 @@ Conditional Random Field (CRF) model for sequence labeling as the baseline model
 
 **Example 1:**
 ```bash
-python qtask_baseline.py --dataset='T50' --iter=500 --mode='xqx' --from_scratch
+python qtask_baseline.py --dataset='T50' --iter=500 --from_scratch
 ```
 
 **Example 2:**
 ```bash
-python qtask_baseline.py --dataset='MOVIE' --iter=500 --mode='pqn'
+python qtask_baseline.py --dataset='MOVIE' --iter=500
 ```
 
 ### Calculate ROUGE scores manually:
@@ -23,12 +23,12 @@ rouge -f data/pred_quotes.txt data/true_quotes.txt --avg
 
 ### Results for 500 iterations:
 
-| Metric | T50-PQN | T50-XQX | MOV-PQN | MOV-XQX |
-| ------ | ------- | ------- | ------- | ------- |
-| F1     | 0.99833 | 0.00000 | 0.99940 | 0.00119 |
-| R1     | 0.65022 | 0.00000 | 0.48328 | 0.00105 |
-| R2     | 0.60791 | 0.00000 | 0.44584 | 0.00104 |
-| RL     | 0.64034 | 0.00000 | 0.48186 | 0.00105 |
+| Metric | T50-PQN  | MOV-PQN |
+| ------ | -------  | ------- |
+| F1     | 0.97108  | 1.00000 |
+| R1     | 0.25349  | 0.25388 |
+| R2     | 0.15925  | 0.20371 |
+| RL     | 0.23071  | 0.25035 |
 
 ### References:
 
