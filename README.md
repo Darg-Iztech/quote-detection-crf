@@ -21,7 +21,7 @@ pip install rouge
 rouge -f data/pred_quotes.txt data/true_quotes.txt --avg
 ```
 
-### Results for 500 iterations:
+### Results for 500 iterations and 5-fold cross-validation:
 
 | Metric | T50           | MOV          |
 | ------ | ------------  | ------------ |
