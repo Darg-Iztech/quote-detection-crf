@@ -24,45 +24,79 @@ def word2features(doc, i):
     :param i: index
     :return: features: the word's feature list
     '''
+
+    def get_extended_postag(word, postag):
+
+        third_person_pronouns = ['she', 'her', 'hers', 'herself', \
+                                'he', 'his', 'him', 'himself', 'hisself', \
+                                'it', 'its', 'itself', 'one', 'ones', "one's", 'oneself', 'self', \
+                                'they', 'their', 'theirs', 'them', 'themselves']
+
+        new_postag = postag
+        if postag == 'PRP' and (word.lower() in third_person_pronouns):
+            new_postag = 'PRP3'
+        elif postag == 'PRP$' and (word.lower() in third_person_pronouns):
+            new_postag = 'PRP$3'
+        elif word.lower() in ['a', 'an']:
+            new_postag = 'INA' # indefinite article
+
+        return new_postag
+
     word = doc[i][0]
-    postag = doc[i][1]
+    postag = get_extended_postag(word, doc[i][1])
 
     features = [
         'bias',
         'word.lower=' + word.lower(),
-        'word[-3:]=' + word[-3:],
-        'word[-2:]=' + word[-2:],
+        #'word[-3:]=' + word[-3:],
+        #'word[-2:]=' + word[-2:],
         'word.isupper=%s' % word.isupper(),
         'word.istitle=%s' % word.istitle(),
-        'word.isdigit=%s' % word.isdigit(),
+        #'word.isdigit=%s' % word.isdigit(),
         'postag=' + postag
     ]
 
-
-    if i > 0:
+    if i > 1:
+        word2 = doc[i - 2][0]
+        postag2 = get_extended_postag(word, doc[i - 2][1])
+        features.extend([
+            '-2:word.lower=' + word2.lower(),
+            '-2:word.istitle=%s' % word2.istitle(),
+            '-2:word.isupper=%s' % word2.isupper(),
+            #'-2:word.isdigit=%s' % word2.isdigit(),
+            '-2:postag=' + postag2
+        ])
+    elif i > 0:
         word1 = doc[i - 1][0]
-        postag1 = doc[i - 1][1]
+        postag1 = get_extended_postag(word, doc[i - 1][1])
         features.extend([
             '-1:word.lower=' + word1.lower(),
             '-1:word.istitle=%s' % word1.istitle(),
             '-1:word.isupper=%s' % word1.isupper(),
-            '-1:word.isdigit=%s' % word1.isdigit(),
+            #'-1:word.isdigit=%s' % word1.isdigit(),
             '-1:postag=' + postag1
         ])
     else:
-
         features.append('BOS')
 
-
-
-    if i < len(doc) - 1:
+    if i < len(doc) - 2:
+        word2 = doc[i + 2][0]
+        postag2 = get_extended_postag(word, doc[i + 2][1])
+        features.extend([
+            '+2:word.lower=' + word2.lower(),
+            '+2:word.istitle=%s' % word2.istitle(),
+            '+2:word.isupper=%s' % word2.isupper(),
+            #'+1:word.isdigit=%s' % word2.isdigit(),
+            '+2:postag=' + postag2
+        ])
+    elif i < len(doc) - 1:
         word1 = doc[i + 1][0]
-        postag1 = doc[i + 1][1]
+        postag1 = get_extended_postag(word, doc[i + 1][1])
         features.extend([
             '+1:word.lower=' + word1.lower(),
             '+1:word.istitle=%s' % word1.istitle(),
             '+1:word.isupper=%s' % word1.isupper(),
-            '+1:word.isdigit=%s' % word1.isdigit(),
+            #'+1:word.isdigit=%s' % word1.isdigit(),
             '+1:postag=' + postag1
         ])
     else:
@@ -80,7 +114,7 @@ def extract_features(doc):
     return [word2features(doc, i) for i in range(len(doc))]
 
 
-def label_data(fpath):
+def label_data(fpath, labeling):
     print('\n\nLabeling {}\n\n'.format(fpath))
     docs = []
     with open(fpath, 'r', encoding="utf-8", errors="ignore") as readFile:
@@ -110,11 +144,17 @@ def label_data(fpath):
             label=[]
 
             for i in range(len(prev_token)):
-                label.append('P')
+                if labeling == 'PQN':
+                    label.append('P')
+                else:
+                    label.append('X')
             for i in range(len(quot_token)):
                 label.append('Q')
             for i in range(len(next_token)):
-                label.append('N')
+                if labeling == 'PQN':
+                    label.append('N')
+                else:
+                    label.append('X')
 
             doc=[]
 
@@ -423,13 +463,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='qtask')
     parser.add_argument('--iter', default=500, type=int, help='Number of iterations')
     parser.add_argument('--dataset', default='T50', type=str, help='Dataset (T50 or movie)')
+    parser.add_argument('--labeling', default='PQN', type=str, help='Type of labeling (PQN or XQX)')
     parser.add_argument('--from_scratch', action='store_true', help='If not set, uses tagged_labeled CSVs')
     args = parser.parse_args()
 
     tagged_labeled_data_path = 'data/{}/tagged_labeled_data.csv'.format(args.dataset)
 
     if args.from_scratch or not exists(tagged_labeled_data_path):
-        labeled_data = label_data("data/{}/qtask_all.csv".format(args.dataset))
+        labeled_data = label_data("data/{}/qtask_all.csv".format(args.dataset), args.labeling)
         postagged_data = postag_data(labeled_data, tagged_labeled_data_path)
     else:
         print('Reading pre-generated pos-tagged data...')
